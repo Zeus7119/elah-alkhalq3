@@ -1,0 +1,35 @@
+name: بناء لعبة إله الخلق (APK)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: تحميل الكود
+        uses: actions/checkout@v4
+
+      - name: إعداد مسار Android SDK
+        run: |
+          mkdir -p ~/.config/godot
+          printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "/root/android-sdk"\n' > ~/.config/godot/editor_settings-4.3.tres
+
+      - name: استيراد المشروع
+        run: timeout 180 godot --headless --editor --quit --path . || true
+
+      - name: بناء ملف APK
+        run: |
+          mkdir -p build
+          godot --headless --path . --export-debug "Android" build/elah-alkhalq.apk
+
+      - name: رفع ملف APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Elah-AlKhalq-APK
+          path: build/*.apk
+          retention-days: 30
