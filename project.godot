@@ -1,0 +1,23 @@
+config_version=5
+
+[application]
+
+config/name="إله الخلق"
+config/description="لعبة إله مطلق: اخلق الكون والحياة وحارب في حروب العوالم"
+run/main_scene="res://scenes/Main.tscn"
+config/features=PackedStringArray("4.3", "Mobile")
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/handheld/orientation=4
+window/stretch/mode="canvas_items"
+
+[internationalization]
+
+rendering/root_node_layout_direction=3
+
+[rendering]
+
+renderer/rendering_method="mobile"
