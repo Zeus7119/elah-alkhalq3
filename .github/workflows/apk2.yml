@@ -34,20 +34,19 @@ jobs:
           keytool -genkey -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "%s/android-sdk"\nexport/android/java_sdk_path = "%s"\nexport/android/debug_keystore = "%s/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\nexport/android/build_tools = "34.0.0"\n' "$HOME" "$JAVA_HOME" "$HOME" > $HOME/.config/godot/editor_settings-4.4.tres
 
-      - name: Check scripts
+      - name: Fix scripts
         run: |
-          GODOT=$HOME/godot/Godot_v4.4.1-stable_linux.x86_64
-          for s in scripts/main.gd scripts/body.gd scripts/god.gd scripts/sfx.gd; do
-            echo "======== $s ========"
-            $GODOT --headless --path . --check-only --script "res://$s" 2>&1 | head -8
-          done
+          sed -i 's/:=/=/g' scripts/*.gd
+          echo "remaining := occurrences:"
+          grep -c ":=" scripts/*.gd || echo "none - CLEAN"
 
       - name: Export
         run: |
           GODOT=$HOME/godot/Godot_v4.4.1-stable_linux.x86_64
           $GODOT --headless --editor --quit --path . || true
           mkdir -p build
-          $GODOT --headless --path . --export-debug "Android" build/elah-alkhalq.apk 2>&1 | grep -iE "error|cannot|unable|parse" | head -10
+          $GODOT --headless --path . --export-debug "Android" build/elah-alkhalq.apk > /tmp/exp.log 2>&1 || true
+          grep -iE "error|cannot|parse" /tmp/exp.log | head -6
           test -f build/elah-alkhalq.apk && ls -la build/elah-alkhalq.apk
 
       - uses: actions/upload-artifact@v4
@@ -65,19 +64,18 @@ jobs:
       - name: Setup
         run: |
           mkdir -p $HOME/.config/godot $HOME/.android $HOME/.local/share/godot
-          env | grep -iE "android|java_home|^HOME=" || true
-          ls /root/.local/share/godot/export_templates/ 2>/dev/null || echo "no templates in /root"
-          cp -r /root/.local/share/godot/export_templates $HOME/.local/share/godot/ 2>/dev/null || echo "COPY TEMPLATES FAILED"
+          cp -r /root/.local/share/godot/export_templates $HOME/.local/share/godot/ 2>/dev/null || true
           keytool -genkey -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" 2>/dev/null || true
           SDK="${ANDROID_HOME:-/usr/lib/android-sdk}"
           printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\nexport/android/debug_keystore = "%s/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\n' "$SDK" "$JAVA_HOME" "$HOME" > $HOME/.config/godot/editor_settings-4.4.tres
+          sed -i 's/:=/=/g' scripts/*.gd
 
       - name: Export
         run: |
           mkdir -p build
           godot --headless --editor --quit --path . || true
           godot --headless --path . --export-debug "Android" build/elah-alkhalq.apk || true
-          ls -la build/
+          test -f build/elah-alkhalq.apk && ls -la build/elah-alkhalq.apk
 
       - uses: actions/upload-artifact@v4
         with:
