@@ -36,12 +36,18 @@ jobs:
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses > /dev/null
           $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "build-tools;34.0.0" "platforms;android-34"
 
-      - name: Keystore + Editor Settings
+      - name: Setup Keystore & Configure Export Preset
         run: |
           mkdir -p $HOME/.android $HOME/.config/godot
           keytool -genkey -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           
+          # إعداد EditorSettings
           printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "%s/android-sdk"\nexport/android/java_sdk_path = "%s"\nexport/android/debug_keystore = "%s/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\nexport/android/build_tools = "34.0.0"\n' "$HOME" "$JAVA_HOME" "$HOME" > $HOME/.config/godot/editor_settings-4.3.tres
+
+          # حقن مسارات الـ Keystore مباشرة في ملف export_presets.cfg لضمان قراءتها
+          sed -i 's|keystore/debug=""|keystore/debug="'"$HOME"'/.android/debug.keystore"|g' export_presets.cfg
+          sed -i 's|keystore/debug_user=""|keystore/debug_user="androiddebugkey"|g' export_presets.cfg
+          sed -i 's|keystore/debug_password=""|keystore/debug_password="android"|g' export_presets.cfg
 
       - name: Fix scripts
         run: |
@@ -52,20 +58,11 @@ jobs:
           GODOT=$HOME/godot/Godot_v4.3-stable_linux.x86_64
           mkdir -p build
           
-          # استيراد المشروع أولاً
+          # 1. فتح المحرك لاستيراد المشروع وإغلاقه
           $GODOT --headless --editor --quit --path . || true
           
-          # التصدير وكتابة المخرجات في سجل
-          $GODOT --headless --path . --export-debug "Android" build/elah-alkhalq.apk > export.log 2>&1 || true
-          
-          # عرض سجل التصدير في المخرجات
-          cat export.log
-          
-          # التأكد من نجاح إنشاء ملف الـ APK
-          if [ ! -f build/elah-alkhalq.apk ]; then
-            echo "❌ لم يتم إنشاء ملف APK!"
-            exit 1
-          fi
+          # 2. تصدير ملف APK مباشرة
+          $GODOT --headless --path . --export-debug "Android" build/elah-alkhalq.apk
 
       - uses: actions/upload-artifact@v4
         with:
