@@ -27,7 +27,7 @@ jobs:
           unzip -q /tmp/tp.zip -d /tmp/tpl
           mv /tmp/tpl/templates/* $HOME/.local/share/godot/export_templates/4.3.stable/
 
-      - name: Install Android SDK
+      - name: Install Android SDK & Setup ADB
         run: |
           mkdir -p $HOME/android-sdk/cmdline-tools /tmp/cli
           curl -sL -o /tmp/cli.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
@@ -37,14 +37,19 @@ jobs:
           export ANDROID_HOME=$HOME/android-sdk
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses > /dev/null
           $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "build-tools;34.0.0" "platforms;android-34"
+          
+          # تنظيف وتشغيل خادم ADB لمنع تعارض البورت 5037
+          $HOME/android-sdk/platform-tools/adb kill-server || true
+          $HOME/android-sdk/platform-tools/adb start-server || true
 
-      - name: Setup Keystore & Configurations
+      - name: Setup Keystore & Editor Settings
         run: |
           mkdir -p $HOME/.android $HOME/.config/godot
           keytool -genkey -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           
           REAL_HOME=$(eval echo ~$USER)
           
+          # ربط إعدادات المحرر بالمسارات المطلقة الحقيقية دون المساس بملف export_presets.cfg الأصلي
           cat <<EOF > $HOME/.config/godot/editor_settings-4.3.tres
           [gd_resource type="EditorSettings" format=3]
 
@@ -57,60 +62,6 @@ jobs:
           export/android/build_tools = "34.0.0"
           EOF
 
-          cat <<EOF > export_presets.cfg
-          [preset.0]
-
-          name="Android"
-          platform="Android"
-          runnable=true
-          advanced_options=false
-          dedicated_server=false
-          custom_features=""
-          export_filter="all_resources"
-          include_filter=""
-          exclude_filter=""
-          export_path="build/elah-alkhalq.apk"
-          encryption_include_filters=""
-          encryption_exclude_filters=""
-          encrypt_pck=false
-          encrypt_directory=false
-
-          [preset.0.options]
-
-          custom_template/debug=""
-          custom_template/release=""
-          gradle_build/use_gradle_build=false
-          gradle_build/gradle_build_directory=""
-          gradle_build/android_source_template=""
-          architectures/armeabi-v7a=true
-          architectures/arm64-v8a=true
-          architectures/x86=false
-          architectures/x86_64=false
-          keystore/debug="${REAL_HOME}/.android/debug.keystore"
-          keystore/debug_user="androiddebugkey"
-          keystore/debug_password="android"
-          keystore/release=""
-          keystore/release_user=""
-          keystore/release_password=""
-          version/code=1
-          version/name="1.0.0"
-          package/unique_name="com.elahkhalq.game"
-          package/name="elah_alkhalq"
-          package/signed=true
-          package/app_category=2
-          launcher_icons/main_192x192=""
-          launcher_icons/adaptive_foreground_432x432=""
-          launcher_icons/adaptive_background_432x432=""
-          screen/immersive_mode=true
-          screen/orientation=4
-          screen/support_small=true
-          screen/support_normal=true
-          screen/support_large=true
-          screen/support_xlarge=true
-          xr_features/xr_mode=0
-          permissions/internet=false
-          EOF
-
       - name: Fix scripts syntax
         run: |
           sed -i 's/:=/=/g' scripts/*.gd || true
@@ -120,7 +71,7 @@ jobs:
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH
           
-          # تشغيل خدمة ADB بوضوح في نفس الـ Shell قبل استدعاء Godot
+          # إعادة التأكد من تشغيل خادم ADB داخل بيئة التصدير
           adb start-server || true
           
           GODOT=$HOME/godot/Godot_v4.3-stable_linux.x86_64
@@ -129,7 +80,7 @@ jobs:
           # استيراد موارد المشروع
           $GODOT --headless --editor --quit --path . || true
           
-          # تصدير APK
+          # تصدير ملف APK اعتماداً على إعدادات المشروع الأساسية
           $GODOT --headless --path . --export-debug "Android" build/elah-alkhalq.apk
           
           if [ ! -f build/elah-alkhalq.apk ]; then
@@ -137,7 +88,8 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
           name: elah-alkhalq-apk
           path: build/elah-alkhalq.apk
