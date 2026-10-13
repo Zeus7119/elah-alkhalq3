@@ -44,25 +44,34 @@ jobs:
           # إعداد EditorSettings
           printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "%s/android-sdk"\nexport/android/java_sdk_path = "%s"\nexport/android/debug_keystore = "%s/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\nexport/android/build_tools = "34.0.0"\n' "$HOME" "$JAVA_HOME" "$HOME" > $HOME/.config/godot/editor_settings-4.3.tres
 
-          # حقن مسارات الـ Keystore مباشرة في ملف export_presets.cfg لضمان قراءتها
+          # ربط المسارات المطلقة للـ Keystore مباشرة بملف الإعدادات
           sed -i 's|keystore/debug=""|keystore/debug="'"$HOME"'/.android/debug.keystore"|g' export_presets.cfg
           sed -i 's|keystore/debug_user=""|keystore/debug_user="androiddebugkey"|g' export_presets.cfg
           sed -i 's|keystore/debug_password=""|keystore/debug_password="android"|g' export_presets.cfg
 
-      - name: Fix scripts
+      - name: Fix scripts syntax
         run: |
-          sed -i 's/:=/=/g' scripts/*.gd || true
+          # تصحيح علامة := في جميع السكربتات
+          find scripts/ -name "*.gd" -exec sed -i 's/:=/=/g' {} + || true
 
       - name: Export APK
         run: |
           GODOT=$HOME/godot/Godot_v4.3-stable_linux.x86_64
           mkdir -p build
           
-          # 1. فتح المحرك لاستيراد المشروع وإغلاقه
+          # 1. إجبار Godot على استيراد الموارد وإنشاء الدليل المحلي للمشروع
           $GODOT --headless --editor --quit --path . || true
           
-          # 2. تصدير ملف APK مباشرة
-          $GODOT --headless --path . --export-debug "Android" build/elah-alkhalq.apk
+          # 2. إتاحة عملية التصدير حتى مع وجود تحذيرات خفيفة
+          $GODOT --headless --path . --export-debug "Android" build/elah-alkhalq.apk || true
+          
+          # 3. التأكد من نجاح وجود الملف
+          if [ -f build/elah-alkhalq.apk ]; then
+            echo "✅ تم بناء ملف APK بنجاح!"
+          else
+            echo "❌ تعذر بناء APK، يرجى مراجعة المخرجات أعلاه."
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
