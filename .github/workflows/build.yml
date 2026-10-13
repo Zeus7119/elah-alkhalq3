@@ -18,8 +18,6 @@ jobs:
           curl -sL -o /tmp/tp.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz
           unzip -q /tmp/tp.zip -d /tmp/tpl
           mv /tmp/tpl/templates/* $HOME/.local/share/godot/export_templates/4.3.stable/
-          echo "TEMPLATES OK:"
-          ls $HOME/.local/share/godot/export_templates/4.3.stable/ | head -5
 
       - name: Android SDK
         run: |
@@ -30,33 +28,106 @@ jobs:
           export ANDROID_HOME=$HOME/android-sdk
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses > /dev/null
           $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "build-tools;34.0.0" "platforms;android-34"
-          echo "SDK OK:"
-          ls $HOME/android-sdk
-          ls $HOME/android-sdk/platform-tools
-          ls $HOME/android-sdk/build-tools
 
       - name: Keystore + Settings
         run: |
           mkdir -p $HOME/.android $HOME/.config/godot
           keytool -genkey -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "%s/android-sdk"\nexport/android/java_sdk_path = "%s"\nexport/android/debug_keystore = "%s/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\n' "$HOME" "$JAVA_HOME" "$HOME" > $HOME/.config/godot/editor_settings-4.3.tres
-          echo "SETTINGS FILE:"
-          cat $HOME/.config/godot/editor_settings-4.3.tres
+
+      - name: Repair project files
+        run: |
+          cat > project.godot <<'EOF'
+          config_version=5
+
+          [application]
+
+          config/name="إله الخلق"
+          config/description="لعبة إله مطلق"
+          run/main_scene="res://scenes/Main.tscn"
+          config/features=PackedStringArray("4.3", "Mobile")
+
+          [display]
+
+          window/size/viewport_width=1280
+          window/size/viewport_height=720
+          window/handheld/orientation=4
+          window/stretch/mode="canvas_items"
+
+          [internationalization]
+
+          rendering/root_node_layout_direction=3
+
+          [rendering]
+
+          renderer/rendering_method="mobile"
+          EOF
+          mkdir -p scenes
+          cat > scenes/Main.tscn <<'EOF'
+          [gd_scene load_steps=2 format=3]
+
+          [ext_resource type="Script" path="res://scripts/main.gd" id="1"]
+
+          [node name="Main" type="Node2D"]
+          script = ExtResource("1")
+          EOF
+          cat > export_presets.cfg <<'EOF'
+          [preset.0]
+
+          name="Android"
+          platform="Android"
+          runnable=true
+          dedicated_server=false
+          custom_features=""
+          export_filter="all_resources"
+          include_filter=""
+          exclude_filter=""
+          export_path="build/elah-alkhalq.apk"
+          encryption_include_filters=""
+          encryption_exclude_filters=""
+          encrypt_pck=false
+          encrypt_directory=false
+
+          [preset.0.options]
+
+          custom_template/debug=""
+          custom_template/release=""
+          gradle_build/use_gradle_build=false
+          gradle_build/gradle_build_directory=""
+          gradle_build/android_source_template=""
+          architectures/armeabi-v7a=true
+          architectures/arm64-v8a=true
+          architectures/x86=false
+          architectures/x86_64=false
+          keystore/debug=""
+          keystore/debug_user=""
+          keystore/debug_password=""
+          keystore/release=""
+          keystore/release_user=""
+          keystore/release_password=""
+          version/code=1
+          version/name="1.0.0"
+          package/unique_name="com.elahkhalq.game"
+          package/name="إله الخلق"
+          package/signed=true
+          screen/immersive_mode=true
+          screen/orientation=4
+          permissions/internet=false
+          EOF
+          echo "=== REPAIRED FILES OK ==="
 
       - name: Import
         run: timeout 240 $HOME/godot/Godot_v4.3-stable_linux.x86_64 --headless --editor --quit --path . || true
 
       - name: Export
         run: |
-          echo "=== SETTINGS NOW ==="
-          cat $HOME/.config/godot/editor_settings-4.3.tres
-          echo "=== TEMPLATES NOW ==="
-          ls $HOME/.local/share/godot/export_templates/4.3.stable/ | head -10
-          echo "=== SDK NOW ==="
-          ls $HOME/android-sdk/platform-tools $HOME/android-sdk/build-tools
-          echo "=== PROJECT FILES ==="
-          ls -la
-          echo "=== EXPORT ==="
           mkdir -p build
           $HOME/godot/Godot_v4.3-stable_linux.x86_64 --headless --path . --export-debug "Android" build/elah-alkhalq.apk
           ls -la build/
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Elah-AlKhalq-APK
+          path: build/*.apk
+          retention-days: 30
