@@ -42,30 +42,27 @@ jobs:
           export ANDROID_HOME=$HOME/android-sdk
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses > /dev/null
           $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "build-tools;34.0.0" "platforms;android-34"
-          
-          $HOME/android-sdk/platform-tools/adb kill-server || true
-          $HOME/android-sdk/platform-tools/adb start-server || true
 
-      - name: Setup Keystore & Editor Settings
+      - name: Setup Keystore & Global Editor Settings
         run: |
           mkdir -p $HOME/.android $HOME/.config/godot
           keytool -genkey -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           
-          REAL_HOME=$(eval echo ~$USER)
-          
-          cat <<EOF > $HOME/.config/godot/editor_settings-4.3.tres
-          [gd_resource type="EditorSettings" format=3]
+          # إنشاء محتوى الإعدادات العام لجميع إصدارات Godot 4
+          SETTINGS_CONTENT='[gd_resource type="EditorSettings" format=3]
 
           [resource]
-          export/android/android_sdk_path = "${REAL_HOME}/android-sdk"
-          export/android/java_sdk_path = "${JAVA_HOME}"
-          export/android/debug_keystore = "${REAL_HOME}/.android/debug.keystore"
+          export/android/android_sdk_path = "'"$HOME"'/android-sdk"
+          export/android/java_sdk_path = "'"$JAVA_HOME"'"
+          export/android/debug_keystore = "'"$HOME"'/.android/debug.keystore"
           export/android/debug_keystore_user = "androiddebugkey"
           export/android/debug_keystore_pass = "android"
-          export/android/build_tools = "34.0.0"
-          EOF
+          export/android/build_tools = "34.0.0"'
 
-      - name: Generate Clean export_presets.cfg
+          echo "$SETTINGS_CONTENT" > $HOME/.config/godot/editor_settings-4.tres
+          echo "$SETTINGS_CONTENT" > $HOME/.config/godot/editor_settings-4.3.tres
+
+      - name: Configure export_presets.cfg
         run: |
           cat <<EOF > export_presets.cfg
           [preset.0]
@@ -96,7 +93,7 @@ jobs:
           architectures/arm64-v8a=true
           architectures/x86=false
           architectures/x86_64=false
-          keystore/debug="${HOME}/.android/debug.keystore"
+          keystore/debug="$HOME/.android/debug.keystore"
           keystore/debug_user="androiddebugkey"
           keystore/debug_password="android"
           keystore/release=""
@@ -130,15 +127,19 @@ jobs:
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH
           
-          adb start-server || true
-          
           GODOT=$HOME/godot/Godot_v4.3-stable_linux.x86_64
           mkdir -p build
           
+          # 1. استيراد الموارد وإنشاء الدليل المحلي
           $GODOT --headless --editor --quit --path . || true
-          $GODOT --headless --path . --export-debug "Android" build/elah-alkhalq.apk
           
-          if [ ! -f build/elah-alkhalq.apk ]; then
+          # 2. أمر التصدير المفصل (Verbose) لمعرفة ومتابعة الشروط بدقة
+          $GODOT --headless --verbose --path . --export-debug "Android" build/elah-alkhalq.apk
+          
+          # التحقق من وجود الملف
+          if [ -f build/elah-alkhalq.apk ]; then
+            echo "✅ تم إنشاء ملف APK بنجاح!"
+          else
             echo "❌ لم يتم إنشاء ملف APK"
             exit 1
           fi
