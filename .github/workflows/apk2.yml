@@ -9,7 +9,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Java JDK
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -27,7 +27,7 @@ jobs:
           unzip -q /tmp/tp.zip -d /tmp/tpl
           mv /tmp/tpl/templates/* $HOME/.local/share/godot/export_templates/4.3.stable/
 
-      - name: Install Android SDK & Setup ADB
+      - name: Install Android SDK
         run: |
           mkdir -p $HOME/android-sdk/cmdline-tools /tmp/cli
           curl -sL -o /tmp/cli.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
@@ -37,10 +37,8 @@ jobs:
           export ANDROID_HOME=$HOME/android-sdk
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses > /dev/null
           $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "build-tools;34.0.0" "platforms;android-34"
-          
-          $HOME/android-sdk/platform-tools/adb start-server || true
 
-      - name: Setup Keystore & Generate Configurations
+      - name: Setup Keystore & Configurations
         run: |
           mkdir -p $HOME/.android $HOME/.config/godot
           keytool -genkey -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
@@ -119,21 +117,28 @@ jobs:
 
       - name: Export APK
         run: |
+          export ANDROID_HOME=$HOME/android-sdk
+          export PATH=$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH
+          
+          # تشغيل خدمة ADB بوضوح في نفس الـ Shell قبل استدعاء Godot
+          adb start-server || true
+          
           GODOT=$HOME/godot/Godot_v4.3-stable_linux.x86_64
           mkdir -p build
           
           # استيراد موارد المشروع
           $GODOT --headless --editor --quit --path . || true
           
-          # تصدير APK في المجلد المحلي والمجلد المستهدف لضمان العثور عليه
+          # تصدير APK
           $GODOT --headless --path . --export-debug "Android" build/elah-alkhalq.apk
           
-          # التحقق من وجود الملف
-          ls -la build/
+          if [ ! -f build/elah-alkhalq.apk ]; then
+            echo "❌ لم يتم إنشاء ملف APK"
+            exit 1
+          fi
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: elah-alkhalq-apk
-          path: build/*.apk
+          path: build/elah-alkhalq.apk
           if-no-files-found: error
