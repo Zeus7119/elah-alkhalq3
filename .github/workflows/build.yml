@@ -1,33 +1,50 @@
-name: بناء لعبة إله الخلق (APK)
+name: Build APK
 
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+on: [push, workflow_dispatch]
 
 jobs:
   build-android:
     runs-on: ubuntu-latest
-    container:
-      image: barichello/godot-ci:4.3
     steps:
-      - name: تحميل الكود
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: إعداد مسار Android SDK
+      - name: Godot + Templates
         run: |
-          mkdir -p ~/.config/godot
-          printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "/root/android-sdk"\n' > ~/.config/godot/editor_settings-4.3.tres
+          mkdir -p $HOME/godot $HOME/.local/share/godot/export_templates/4.3.stable
+          curl -sL -o /tmp/godot.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip
+          unzip -q /tmp/godot.zip -d $HOME/godot
+          chmod +x $HOME/godot/Godot_v4.3-stable_linux.x86_64
+          curl -sL -o /tmp/tp.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz
+          unzip -q /tmp/tp.zip -d /tmp/tpl
+          mv /tmp/tpl/templates/* $HOME/.local/share/godot/export_templates/4.3.stable/
 
-      - name: استيراد المشروع
-        run: timeout 180 godot --headless --editor --quit --path . || true
+      - name: Android SDK
+        run: |
+          mkdir -p $HOME/android-sdk/cmdline-tools /tmp/cli
+          curl -sL -o /tmp/cli.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q /tmp/cli.zip -d /tmp/cli
+          mv /tmp/cli/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
+          export ANDROID_HOME=$HOME/android-sdk
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses > /dev/null
+          $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "build-tools;34.0.0" "platforms;android-34"
 
-      - name: بناء ملف APK
+      - name: Keystore + Settings
+        run: |
+          mkdir -p $HOME/.android $HOME/.config/godot
+          keytool -genkey -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "%s/android-sdk"\nexport/android/java_sdk_path = "%s"\nexport/android/debug_keystore = "%s/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\n' "$HOME" "$JAVA_HOME" "$HOME" > $HOME/.config/godot/editor_settings-4.3.tres
+
+      - name: Import
+        run: timeout 240 $HOME/godot/Godot_v4.3-stable_linux.x86_64 --headless --editor --quit --path . || true
+
+      - name: Export
         run: |
           mkdir -p build
-          godot --headless --path . --export-debug "Android" build/elah-alkhalq.apk
+          $HOME/godot/Godot_v4.3-stable_linux.x86_64 --headless --path . --export-debug "Android" build/elah-alkhalq.apk
+          ls -la build/
 
-      - name: رفع ملف APK
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: Elah-AlKhalq-APK
