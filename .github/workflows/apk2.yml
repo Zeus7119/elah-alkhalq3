@@ -51,6 +51,9 @@ jobs:
         run: |
           GODOT=$HOME/godot/Godot_v4.3-stable_linux.x86_64
           mkdir -p build
+          # 1. تهيئة المشروع واستيراد الموارد أولاً
+          $GODOT --headless --editor --quit --path . || true
+          # 2. عملية التصدير
           $GODOT --headless --path . --export-debug "Android" build/elah-alkhalq.apk
 
       - uses: actions/upload-artifact@v4
