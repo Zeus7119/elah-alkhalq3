@@ -3,7 +3,7 @@ name: Build APK v2
 on: [push, workflow_dispatch]
 
 jobs:
-  build-android:
+  path1:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,18 +34,64 @@ jobs:
           keytool -genkey -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "%s/android-sdk"\nexport/android/java_sdk_path = "%s"\nexport/android/debug_keystore = "%s/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\nexport/android/build_tools = "34.0.0"\n' "$HOME" "$JAVA_HOME" "$HOME" > $HOME/.config/godot/editor_settings-4.4.tres
 
+      - name: Doctor
+        run: |
+          echo "=== ENV ==="
+          echo "HOME=$HOME JAVA_HOME=$JAVA_HOME"
+          echo "=== CHECKS ==="
+          B=$HOME/android-sdk
+          T=$HOME/.local/share/godot/export_templates/4.4.1.stable
+          for p in "$T/android_debug.apk:tpl-debug" "$T/android_release.apk:tpl-release" "$B/platform-tools:sdk-pt" "$B/cmdline-tools:sdk-cli" "$B/platform-tools/adb:adb" "$B/build-tools/34.0.0/apksigner:apksigner" "$B/build-tools/34.0.0/zipalign:zipalign" "$B/build-tools/34.0.0/aapt2:aapt2" "$JAVA_HOME/bin/java:java" "$HOME/.android/debug.keystore:keystore" "$B/platforms/android-34:platform-34"; do
+            f="${p%%:*}"; n="${p##*:}"
+            if [ -e "$f" ]; then echo "PASS: $n"; else echo "FAIL: $n ($f)"; fi
+          done
+
       - name: Export
         run: |
           GODOT=$HOME/godot/Godot_v4.4.1-stable_linux.x86_64
-          git checkout -- .
           $GODOT --headless --editor --quit --path . || true
           mkdir -p build
-          $GODOT --headless --path . --export-debug "Android" build/elah-alkhalq.apk 2>&1 | tail -10
-          ls -la build/
+          $GODOT --headless --verbose --path . --export-debug "Android" build/elah-alkhalq.apk > /tmp/full.log 2>&1 || true
+          echo "=== FILTERED LOG ==="
+          grep -inE "error|cannot|unable|missing|invalid|android|sdk|java|keystore|template|apksigner|zipalign|adb|build-tools" /tmp/full.log | head -40
+          echo "=== APK CHECK ==="
+          ls -la build/ || true
           test -f build/elah-alkhalq.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Elah-AlKhalq-APK
+          name: APK-path1
           path: build/*.apk
           if-no-files-found: error
+
+  path2:
+    runs-on: ubuntu-latest
+    container: barichello/godot-ci:4.4
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup
+        run: |
+          env | grep -iE "android|java_home|^HOME=" || true
+          echo "=== IMAGE CONTENTS ==="
+          ls /root/.local/share/godot/export_templates/ 2>/dev/null || echo "no templates in /root"
+          ls -d /root/android-sdk /opt/android-sdk 2>/dev/null || echo "no sdk in common paths"
+          mkdir -p $HOME/.local/share/godot
+          cp -r /root/.local/share/godot/export_templates $HOME/.local/share/godot/ 2>/dev/null || echo "COPY TEMPLATES FAILED"
+          mkdir -p $HOME/.android
+          keytool -genkey -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" 2>/dev/null || true
+          SDK="${ANDROID_HOME:-/root/android-sdk}"
+          printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\nexport/android/debug_keystore = "%s/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\n' "$SDK" "$JAVA_HOME" "$HOME" > $HOME/.config/godot/editor_settings-4.4.tres
+
+      - name: Export
+        run: |
+          mkdir -p build
+          godot --headless --editor --quit --path . || true
+          godot --headless --path . --export-debug "Android" build/elah-alkhalq.apk || true
+          ls -la build/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: APK-path2
+          path: build/*.apk
+          if-no-files-found: ignore
