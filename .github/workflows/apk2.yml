@@ -1,22 +1,29 @@
-name: Build APK v2
+name: Build APK
 
 on: [push, workflow_dispatch]
 
 jobs:
-  path1:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Godot + Templates
+      - name: Set up Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Godot + Templates (v4.3)
         run: |
-          mkdir -p $HOME/godot $HOME/.local/share/godot/export_templates/4.4.1.stable
-          curl -sL -o /tmp/godot.zip https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip
+          mkdir -p $HOME/godot $HOME/.local/share/godot/export_templates/4.3.stable
+          curl -sL -o /tmp/godot.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip
           unzip -q /tmp/godot.zip -d $HOME/godot
-          chmod +x $HOME/godot/Godot_v4.4.1-stable_linux.x86_64
-          curl -sL -o /tmp/tp.zip https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz
+          chmod +x $HOME/godot/Godot_v4.3-stable_linux.x86_64
+          
+          curl -sL -o /tmp/tp.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz
           unzip -q /tmp/tp.zip -d /tmp/tpl
-          mv /tmp/tpl/templates/* $HOME/.local/share/godot/export_templates/4.4.1.stable/
+          mv /tmp/tpl/templates/* $HOME/.local/share/godot/export_templates/4.3.stable/
 
       - name: Android SDK
         run: |
@@ -24,6 +31,7 @@ jobs:
           curl -sL -o /tmp/cli.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           unzip -q /tmp/cli.zip -d /tmp/cli
           mv /tmp/cli/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
+          
           export ANDROID_HOME=$HOME/android-sdk
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses > /dev/null
           $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "build-tools;34.0.0" "platforms;android-34"
@@ -32,53 +40,21 @@ jobs:
         run: |
           mkdir -p $HOME/.android $HOME/.config/godot
           keytool -genkey -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "%s/android-sdk"\nexport/android/java_sdk_path = "%s"\nexport/android/debug_keystore = "%s/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\nexport/android/build_tools = "34.0.0"\n' "$HOME" "$JAVA_HOME" "$HOME" > $HOME/.config/godot/editor_settings-4.4.tres
+          
+          printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "%s/android-sdk"\nexport/android/java_sdk_path = "%s"\nexport/android/debug_keystore = "%s/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\nexport/android/build_tools = "34.0.0"\n' "$HOME" "$JAVA_HOME" "$HOME" > $HOME/.config/godot/editor_settings-4.3.tres
 
       - name: Fix scripts
         run: |
-          sed -i 's/:=/=/g' scripts/*.gd
-          echo "remaining := occurrences:"
-          grep -c ":=" scripts/*.gd || echo "none - CLEAN"
+          sed -i 's/:=/=/g' scripts/*.gd || true
 
-      - name: Export
+      - name: Export APK
         run: |
-          GODOT=$HOME/godot/Godot_v4.4.1-stable_linux.x86_64
-          $GODOT --headless --editor --quit --path . || true
+          GODOT=$HOME/godot/Godot_v4.3-stable_linux.x86_64
           mkdir -p build
-          $GODOT --headless --path . --export-debug "Android" build/elah-alkhalq.apk > /tmp/exp.log 2>&1 || true
-          grep -iE "error|cannot|parse" /tmp/exp.log | head -6
-          test -f build/elah-alkhalq.apk && ls -la build/elah-alkhalq.apk
+          $GODOT --headless --path . --export-debug "Android" build/elah-alkhalq.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: APK-path1
+          name: elah-alkhalq-apk
           path: build/*.apk
           if-no-files-found: error
-
-  path2:
-    runs-on: ubuntu-latest
-    container: barichello/godot-ci:4.4
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup
-        run: |
-          mkdir -p $HOME/.config/godot $HOME/.android $HOME/.local/share/godot
-          cp -r /root/.local/share/godot/export_templates $HOME/.local/share/godot/ 2>/dev/null || true
-          keytool -genkey -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" 2>/dev/null || true
-          SDK="${ANDROID_HOME:-/usr/lib/android-sdk}"
-          printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\nexport/android/debug_keystore = "%s/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\n' "$SDK" "$JAVA_HOME" "$HOME" > $HOME/.config/godot/editor_settings-4.4.tres
-          sed -i 's/:=/=/g' scripts/*.gd
-
-      - name: Export
-        run: |
-          mkdir -p build
-          godot --headless --editor --quit --path . || true
-          godot --headless --path . --export-debug "Android" build/elah-alkhalq.apk || true
-          test -f build/elah-alkhalq.apk && ls -la build/elah-alkhalq.apk
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: APK-path2
-          path: build/*.apk
-          if-no-files-found: ignore
