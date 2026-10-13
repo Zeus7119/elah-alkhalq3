@@ -16,16 +16,25 @@ jobs:
 
       - name: Install Godot 4.3 & Export Templates
         run: |
-          mkdir -p $HOME/godot
+          # إنشاء مجلد القوالب بالمسار الذي يقرؤه Godot تلقائياً
           mkdir -p $HOME/.local/share/godot/export_templates/4.3.stable
+          mkdir -p $HOME/godot
           
+          # تحميل وتشغيل محرك Godot 4.3
           curl -sL -o /tmp/godot.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip
           unzip -q /tmp/godot.zip -d $HOME/godot
           chmod +x $HOME/godot/Godot_v4.3-stable_linux.x86_64
           
+          # تحميل قوالب التصدير وفكها مباشرة في مجلد التصدير الخاص بالمحرك
           curl -sL -o /tmp/tp.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz
           unzip -q /tmp/tp.zip -d /tmp/tpl
-          mv /tmp/tpl/templates/* $HOME/.local/share/godot/export_templates/4.3.stable/
+          
+          # نقل المحتويات بشكل دقيق
+          if [ -d "/tmp/tpl/templates" ]; then
+            mv /tmp/tpl/templates/* $HOME/.local/share/godot/export_templates/4.3.stable/
+          else
+            mv /tmp/tpl/* $HOME/.local/share/godot/export_templates/4.3.stable/
+          fi
 
       - name: Install Android SDK & Setup ADB
         run: |
@@ -38,7 +47,6 @@ jobs:
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses > /dev/null
           $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "build-tools;34.0.0" "platforms;android-34"
           
-          # تنظيف وتشغيل خادم ADB لمنع تعارض البورت 5037
           $HOME/android-sdk/platform-tools/adb kill-server || true
           $HOME/android-sdk/platform-tools/adb start-server || true
 
@@ -49,7 +57,6 @@ jobs:
           
           REAL_HOME=$(eval echo ~$USER)
           
-          # ربط إعدادات المحرر بالمسارات المطلقة الحقيقية دون المساس بملف export_presets.cfg الأصلي
           cat <<EOF > $HOME/.config/godot/editor_settings-4.3.tres
           [gd_resource type="EditorSettings" format=3]
 
@@ -71,7 +78,6 @@ jobs:
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH
           
-          # إعادة التأكد من تشغيل خادم ADB داخل بيئة التصدير
           adb start-server || true
           
           GODOT=$HOME/godot/Godot_v4.3-stable_linux.x86_64
@@ -80,7 +86,7 @@ jobs:
           # استيراد موارد المشروع
           $GODOT --headless --editor --quit --path . || true
           
-          # تصدير ملف APK اعتماداً على إعدادات المشروع الأساسية
+          # تصدير ملف APK مع فحص الأخطاء
           $GODOT --headless --path . --export-debug "Android" build/elah-alkhalq.apk
           
           if [ ! -f build/elah-alkhalq.apk ]; then
