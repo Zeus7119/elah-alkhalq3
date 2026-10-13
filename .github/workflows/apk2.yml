@@ -34,51 +34,18 @@ jobs:
           keytool -genkey -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "%s/android-sdk"\nexport/android/java_sdk_path = "%s"\nexport/android/debug_keystore = "%s/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\nexport/android/build_tools = "34.0.0"\n' "$HOME" "$JAVA_HOME" "$HOME" > $HOME/.config/godot/editor_settings-4.4.tres
 
-      - name: Inspect
-        run: |
-          echo "=== TABS CHECK (0 tabs = broken indentation!) ==="
-          for f in scripts/*.gd; do echo "$f => $(grep -c $'\t' "$f") lines with TAB"; done
-          echo "=== export_presets.cfg ==="
-          cat export_presets.cfg
-          echo "=== project.godot ==="
-          cat project.godot
-          echo "=== Main.tscn ==="
-          cat scenes/Main.tscn
-
-      - name: Bisect A (real project.godot, minimal presets+scene)
+      - name: Export
         run: |
           GODOT=$HOME/godot/Godot_v4.4.1-stable_linux.x86_64
+          git checkout -- .
+          $GODOT --headless --editor --quit --path . || true
           mkdir -p build
-          printf '[preset.0]\n\nname="Android"\nplatform="Android"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\nexport_path="build/a.apk"\n\n[preset.0.options]\n\narchitectures/armeabi-v7a=true\narchitectures/arm64-v8a=true\ngradle_build/use_gradle_build=false\nkeystore/debug=""\nversion/code=1\nversion/name="1.0.0"\npackage/unique_name="com.a.game"\npackage/name="A"\npackage/signed=true\nscreen/orientation=4\npermissions/internet=false\n' > export_presets.cfg
-          printf '[gd_scene format=3]\n\n[node name="Main" type="Node2D"]\n' > scenes/Main.tscn
-          $GODOT --headless --editor --quit --path . || true
-          $GODOT --headless --path . --export-debug "Android" build/a.apk 2>&1 | grep -E "ERROR|Cannot|Unable" | head -5
-          ls build/a.apk >/dev/null 2>&1 && echo ">>> TEST A: OK" || echo ">>> TEST A: FAIL"
-
-      - name: Bisect B (minimal project.godot, real presets+scene+scripts)
-        run: |
-          GODOT=$HOME/godot/Godot_v4.4.1-stable_linux.x86_64
-          git checkout -- export_presets.cfg scenes/Main.tscn project.godot
-          printf 'config_version=5\n\n[application]\n\nconfig/name="Mini"\nrun/main_scene="res://scenes/Main.tscn"\nconfig/features=PackedStringArray("4.4", "Mobile")\n' > project.godot
-          $GODOT --headless --editor --quit --path . || true
-          $GODOT --headless --path . --export-debug "Android" build/b.apk 2>&1 | grep -E "ERROR|Cannot|Unable" | head -5
-          ls build/b.apk >/dev/null 2>&1 && echo ">>> TEST B: OK" || echo ">>> TEST B: FAIL"
-
-      - name: Bisect C (all original)
-        run: |
-          GODOT=$HOME/godot/Godot_v4.4.1-stable_linux.x86_64
-          git checkout -- project.godot
-          $GODOT --headless --editor --quit --path . || true
-          $GODOT --headless --path . --export-debug "Android" build/c.apk 2>&1 | grep -E "ERROR|Cannot|Unable" | head -5
-          ls build/c.apk >/dev/null 2>&1 && echo ">>> TEST C: OK" || echo ">>> TEST C: FAIL"
-
-      - name: Export real
-        run: |
-          GODOT=$HOME/godot/Godot_v4.4.1-stable_linux.x86_64
-          $GODOT --headless --path . --export-debug "Android" build/elah-alkhalq.apk 2>&1 | tail -8
-          test -f build/elah-alkhalq.apk && ls -la build/elah-alkhalq.apk
+          $GODOT --headless --path . --export-debug "Android" build/elah-alkhalq.apk 2>&1 | tail -10
+          ls -la build/
+          test -f build/elah-alkhalq.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: Elah-AlKhalq-APK
           path: build/*.apk
+          if-no-files-found: error
