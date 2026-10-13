@@ -27,12 +27,12 @@ jobs:
           unzip -q /tmp/tp.zip -d /tmp/tpl
           
           if [ -d "/tmp/tpl/templates" ]; then
-            mv /tmp/tpl/templates/* $HOME/.local/share/godot/export_templates/4.3.stable/
+            cp -r /tmp/tpl/templates/* $HOME/.local/share/godot/export_templates/4.3.stable/
           else
-            mv /tmp/tpl/* $HOME/.local/share/godot/export_templates/4.3.stable/
+            cp -r /tmp/tpl/* $HOME/.local/share/godot/export_templates/4.3.stable/
           fi
 
-      - name: Install Android SDK & Setup ADB
+      - name: Install Android SDK
         run: |
           mkdir -p $HOME/android-sdk/cmdline-tools /tmp/cli
           curl -sL -o /tmp/cli.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
@@ -48,22 +48,25 @@ jobs:
           mkdir -p $HOME/.android $HOME/.config/godot
           keytool -genkey -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           
-          # إنشاء محتوى الإعدادات العام لجميع إصدارات Godot 4
-          SETTINGS_CONTENT='[gd_resource type="EditorSettings" format=3]
+          REAL_HOME=$(eval echo ~$USER)
+
+          cat <<EOF > $HOME/.config/godot/editor_settings-4.tres
+          [gd_resource type="EditorSettings" format=3]
 
           [resource]
-          export/android/android_sdk_path = "'"$HOME"'/android-sdk"
-          export/android/java_sdk_path = "'"$JAVA_HOME"'"
-          export/android/debug_keystore = "'"$HOME"'/.android/debug.keystore"
+          export/android/android_sdk_path = "${REAL_HOME}/android-sdk"
+          export/android/java_sdk_path = "${JAVA_HOME}"
+          export/android/debug_keystore = "${REAL_HOME}/.android/debug.keystore"
           export/android/debug_keystore_user = "androiddebugkey"
           export/android/debug_keystore_pass = "android"
-          export/android/build_tools = "34.0.0"'
+          export/android/build_tools = "34.0.0"
+          EOF
 
-          echo "$SETTINGS_CONTENT" > $HOME/.config/godot/editor_settings-4.tres
-          echo "$SETTINGS_CONTENT" > $HOME/.config/godot/editor_settings-4.3.tres
+          cp $HOME/.config/godot/editor_settings-4.tres $HOME/.config/godot/editor_settings-4.3.tres
 
-      - name: Configure export_presets.cfg
+      - name: Setup Complete export_presets.cfg
         run: |
+          REAL_HOME=$(eval echo ~$USER)
           cat <<EOF > export_presets.cfg
           [preset.0]
 
@@ -87,13 +90,14 @@ jobs:
           custom_template/debug=""
           custom_template/release=""
           gradle_build/use_gradle_build=false
-          gradle_build/gradle_build_directory=""
-          gradle_build/android_source_template=""
+          gradle_build/export_format=0
+          gradle_build/min_sdk=""
+          gradle_build/target_sdk=""
           architectures/armeabi-v7a=true
           architectures/arm64-v8a=true
           architectures/x86=false
           architectures/x86_64=false
-          keystore/debug="$HOME/.android/debug.keystore"
+          keystore/debug="${REAL_HOME}/.android/debug.keystore"
           keystore/debug_user="androiddebugkey"
           keystore/debug_password="android"
           keystore/release=""
@@ -105,17 +109,8 @@ jobs:
           package/name="elah_alkhalq"
           package/signed=true
           package/app_category=2
-          launcher_icons/main_192x192=""
-          launcher_icons/adaptive_foreground_432x432=""
-          launcher_icons/adaptive_background_432x432=""
           screen/immersive_mode=true
-          screen/orientation=4
-          screen/support_small=true
-          screen/support_normal=true
-          screen/support_large=true
-          screen/support_xlarge=true
-          xr_features/xr_mode=0
-          permissions/internet=false
+          screen/orientation=0
           EOF
 
       - name: Fix scripts syntax
@@ -130,13 +125,12 @@ jobs:
           GODOT=$HOME/godot/Godot_v4.3-stable_linux.x86_64
           mkdir -p build
           
-          # 1. استيراد الموارد وإنشاء الدليل المحلي
+          # 1. تحديث كافة الموارد وإعادة توليد ملفات النظام للمشروع
           $GODOT --headless --editor --quit --path . || true
           
-          # 2. أمر التصدير المفصل (Verbose) لمعرفة ومتابعة الشروط بدقة
-          $GODOT --headless --verbose --path . --export-debug "Android" build/elah-alkhalq.apk
+          # 2. التصدير المباشر
+          $GODOT --headless --path . --export-debug "Android" build/elah-alkhalq.apk
           
-          # التحقق من وجود الملف
           if [ -f build/elah-alkhalq.apk ]; then
             echo "✅ تم إنشاء ملف APK بنجاح!"
           else
